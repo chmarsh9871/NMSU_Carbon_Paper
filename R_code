@@ -1,159 +1,478 @@
-install.packages("tidyverse")
-install.packages("modelr")
-install.packages("MuMIn")
+########################################
+# 1. Load packages and input data
+########################################
+
 library(MuMIn)
 library(ggplot2)
 library(modelr)
 library(tidyr)
 library(plotly)
+library(dplyr)
+library(mgcv)
+library(corrplot)
+library(reshape2)
+library(elevatr)
+library(raster)
+library(sf)
+library(sp)
+library(combinat)
 
+# Seedling-level dataset for biomass and climate
 SC <- read.csv("//Users/guestpc/Library/CloudStorage/OneDrive-UniversityofNewMexico/a1DOCS/Carbon Project NMSU/Carbon Project Data/SeedCarbon5_newclim.csv")
-#SC <- read.csv("C:/Users/Chris/OneDrive - University of New Mexico/a1DOCS/Carbon Project NMSU/Carbon Project Data/SeedCarbon2.csv")
 
 nrow(SC)
 glimpse(SC)
-#change column types
-
 str(SC)
-SC$Diameter <- as.integer(as.character(SC$Diameter))
-SC$Height <- as.integer(as.character(SC$Height))
-SC$SHELTER <- as.integer(as.character(SC$Height))
-SC$NEEDLE_DRYWT <- as.double(as.character(SC$NEEDLE_DRYWT))
+
+########################################
+# 2. Data cleaning and type conversions
+########################################
+
+SC$Diameter       <- as.integer(as.character(SC$Diameter))
+SC$Height         <- as.integer(as.character(SC$Height))
+SC$SHELTER        <- as.integer(as.character(SC$Height))   # Note: using Height, check this is intentional
+SC$NEEDLE_DRYWT   <- as.double(as.character(SC$NEEDLE_DRYWT))
 SC$Combined_DRYWT <- as.double(as.character(SC$Combined_DRYWT))
 
-ggplot(SC, aes(x = Height*Diameter, y = Combined_DRYWT, col = SITE, group = SITE))+
-  geom_point(size = 3, alpha = 0.3)+
-  geom_smooth(method = "gam", alpha = 0.13)+xlim(0,1000)
+########################################
+# 3. Initial visualization:
+#    Allometric relationship (Height * Diameter vs. Combined_DRYWT)
+########################################
+
+ggplot(SC, aes(x = Height * Diameter, y = Combined_DRYWT, col = SITE, group = SITE)) +
+  geom_point(size = 3, alpha = 0.3) +
+  geom_smooth(method = "gam", alpha = 0.13) +
+  xlim(0, 1000)
+
+ggplot(SC, aes(x = Height * Diameter, y = Combined_DRYWT, col = SITE, group = SITE)) +
+  geom_point(size = 3, alpha = 0.3) +
+  geom_smooth(method = "gam", alpha = 0.13) +
+  xlim(0, 250) + ylim(0, 25)
+
+########################################
+# 4. Filter out damaged seedlings
+#    (aligns with Methods: exclusion of browsed/rodent-damaged seedlings)
+########################################
 
 SC1 <- dplyr::filter(SC, UngulateBrowse == 0)
 SC2 <- dplyr::filter(SC1, RodentDamage == 0)
-
-ggplot(SC2, aes(x = Height*Diameter, y = Combined_DRYWT, col = SITE, group = SITE))+
-  geom_point(size = 3, alpha = 0.3)+
-  geom_smooth(method = "gam", alpha = 0.13)+xlim(0,1000)
-
-gam1 <- mgcv::gam(Combined_DRYWT ~ 0 +Height*Diameter, data = SC2, na.action = na.exclude)
-summary(gam1)
-gam2 <- mgcv::gam(GRNWT ~ 0+ Height*Diameter, data = SC2, na.action = na.exclude)
-summary(gam2)
-gam3 <- mgcv::gam(NEEDLE_DRYWT~ 0+ Height*Diameter, data = SC2)
-summary(gam3)
-gam4 <- mgcv::gam(STEM_DRYWT ~ 0+ Height*Diameter, data = SC2, na.action = na.exclude)
-summary(gam4)
-gam1_smooth <- mgcv::gam(Combined_DRYWT ~ 0 +s(Height)*s(Diameter), data = SC2)
-summary(gam1_smooth)
-
-SC2 <- add_predictions(SC2, gam1, var = "pred_direct_gam", type = NULL)
-SC2 <- add_predictions(SC2, gam1_smooth, var = "pred_direct_gam_smooth", type = NULL)
-lmAA <- lm(pred_direct_gam ~ pred_direct_gam_smooth, data = SC2 )
-summary(lmAA)
-
-write.csv(SC2,"//Users/guestpc/Library/CloudStorage/OneDrive-UniversityofNewMexico/a1DOCS/Carbon Project NMSU/Carbon Project Data/SC2.csv")
-
-
-SC2$AGE <- (2024 - SC2$Year.Planted)
-
-gam5 <- mgcv::gam(pred_direct_gam~AGE+bio_18+bio_5+bio_1, data = SC2)
-summary(gam5)
-
-gam6 <- mgcv::gam(pred_direct_gam~0+AGE+bio_18+bio_5+bio_1, data = SC2)
-summary(gam6)
-
-SC2$pred_direct_gam
-SC2 <- SC2 %>% drop_na(pred_direct_gam)
-gam7 <- mgcv::gam(pred_direct_gam~0+AGE+bio_1+bio_2+bio_3+bio_4+bio_5+
-                    bio_6+bio_7+bio_8+bio_9+bio_10+
-                    bio_11+bio_12+bio_13+bio_14+bio_15+
-                    bio_16+bio_17+bio_18+bio_19,data = SC2)
-summary(gam7)
-
-options(na.action = "na.fail")
-dd <- dredge(gam7, extra = alist(AIC, BIC, ICOMP, Cp))
-options(na.action = "na.omit")
-Age 17 3 4 7
-
-
-
-gam7a <- mgcv::g
-
-gam8 <- mgcv::gam(pred_direct_gam~0+AGE+bio_5+bio_10+bio_14,data = SC2)
-summary(gam8)
-
-gam9 <- mgcv::gam(pred_direct_gam~0+AGE+bio_10+bio_12+bio_16+bio_17,data = SC2)
-summary(gam9)
-
-gam10 <-mgcv::gam(pred_direct_gam~AGE+bio_10+bio_12+bio_16+bio_17,data = SC2)
-summary(gam10)
-
-gam9 <- mgcv::gam(pred_direct_gam~0+AGE+bio_10+bio_12+bio_16+bio_17,data = SC2)
-summary(gam9)
-
-gam11 <- mgcv::gam(pred_direct_gam~0+s(AGE,k=5)+bio_10+bio_12+bio_16+s(bio_17,k=6),data = SC2)
-summary(gam11)
-
-
-gam12 <- mgcv::gam(pred_direct_gam~0+s(AGE,k=5)+bio_10+bio_12+bio_16+bio_17,data = SC2, method = 
-                     "REML")
-summary(gam12)
-
-
-SC2 <- add_predictions(SC2, gam9, var = "pred_indirect_gam", type = NULL)
-SC2 <- add_predictions(SC2, gam11, var = "pred_indirect_gam_smooth", type = NULL)
-
-
 nrow(SC2)
 
-direct_check_lm <- lm(Combined_DRYWT ~pred_direct_gam, data = SC2)
-summary(direct_check_lm)
-indirect_check_lm <- lm(Combined_DRYWT ~pred_indirect_gam, data = SC2)
-summary(indirect_check_lm)
-indirect_smooth_check_lm <- lm(Combined_DRYWT ~pred_indirect_gam_smooth, data = SC2)
-summary(indirect_smooth_check_lm)
+########################################
+# 5. Green vs. dry mass and organ fractions
+#    (summary stats for text: dry fraction, needle vs stem %)
+########################################
 
-indirect_direct_check_lm <- lm(pred_direct_gam ~pred_indirect_gam, data = SC2)
-summary(indirect_direct_check_lm)
-indirect_direct_check_lm <- lm(pred_direct_gam ~pred_indirect_gam_smooth, data = SC2)
-summary(indirect_direct_check_lm)
+# By site
+SC %>%
+  group_by(SITE) %>%
+  summarise(
+    mean_pct_diff     = mean((GRNWT - Combined_DRYWT) / GRNWT * 100, na.rm = TRUE),
+    sd_pct_diff       = sd((GRNWT - Combined_DRYWT) / GRNWT * 100, na.rm = TRUE),
+    mean_dry_fraction = mean(Combined_DRYWT / GRNWT * 100, na.rm = TRUE),
+    sd_dry_fraction   = sd(Combined_DRYWT / GRNWT * 100, na.rm = TRUE),
+    mean_needle_pct   = mean(NEEDLE_DRYWT / Combined_DRYWT * 100, na.rm = TRUE),
+    sd_needle_pct     = sd(NEEDLE_DRYWT / Combined_DRYWT * 100, na.rm = TRUE),
+    mean_stem_pct     = mean(STEM_DRYWT / Combined_DRYWT * 100, na.rm = TRUE),
+    sd_stem_pct       = sd(STEM_DRYWT / Combined_DRYWT * 100, na.rm = TRUE),
+    .groups           = "drop"
+  )
 
+# Across all sites (overall averages)
+SC %>%
+  summarise(
+    mean_pct_diff     = mean((GRNWT - Combined_DRYWT) / GRNWT * 100, na.rm = TRUE),
+    sd_pct_diff       = sd((GRNWT - Combined_DRYWT) / GRNWT * 100, na.rm = TRUE),
+    mean_dry_fraction = mean(Combined_DRYWT / GRNWT * 100, na.rm = TRUE),
+    sd_dry_fraction   = sd(Combined_DRYWT / GRNWT * 100, na.rm = TRUE),
+    mean_needle_pct   = mean(NEEDLE_DRYWT / Combined_DRYWT * 100, na.rm = TRUE),
+    sd_needle_pct     = sd(NEEDLE_DRYWT / Combined_DRYWT * 100, na.rm = TRUE),
+    mean_stem_pct     = mean(STEM_DRYWT / Combined_DRYWT * 100, na.rm = TRUE),
+    sd_stem_pct       = sd(STEM_DRYWT / Combined_DRYWT * 100, na.rm = TRUE)
+  )
 
+# Site mean combined dry mass
+SC_mean <- SC %>%
+  group_by(SITE) %>%
+  summarise(
+    mean_Combined_DRYWT = mean(Combined_DRYWT, na.rm = TRUE),
+    .groups = "drop"
+  )
 
-indirect_check_lm <- lm(Combined_DRYWT ~pred_indirect_gam, data = SC2)
-summary(indirect_check_lm)
+########################################
+# 6. Plot-level C_mean vs. site variables (slope, aspect, severity)
+#    (aligns with Methods/Results: plot-level relationships)
+########################################
 
+byPlot <- read.csv("/Users/guestpc/Documents/FS_NMSU_for_plots/FS_plots_B1.csv")
 
-###---FIGURE 1
+plotLM1 <- lm(C_mean ~ FireSeveri, data = byPlot)
+plotLM2 <- lm(C_mean ~ slope,      data = byPlot)
+plotLM3 <- lm(C_mean ~ aspect,     data = byPlot)
 
-SC_present <- read.csv("//Users/guestpc/Library/CloudStorage/OneDrive-UniversityofNewMexico/a1DOCS/Carbon Project NMSU/Project_C_stock_by_site_new_b.csv")
+summary(plotLM1)
+summary(plotLM2)
+summary(plotLM3)
 
-SC_present <- add_predictions(SC_present, gam9, var = "pred_indirect_gam")
+ggplot(byPlot, aes(x = C_mean, y = slope, col = Site, group = Site)) +
+  geom_point(size = 3, alpha = 0.3) +
+  geom_smooth(method = "lm", alpha = 0.13)
 
-SC_present <- add_predictions(SC_present, gam11, var = "pred_indirect_gam_smooth")
-SC_present$C_kg_per_acre1 <- ((SC_present$pred_indirect_gam * SC_present$TPA_planted)/100)
-SC_present$C_kg_per_acre2 <- ((SC_present$pred_indirect_gam_smooth * SC_present$TPA_planted)/100)
-SC_present$C_kg_per_acre_surv_adj1 <- (SC_present$C_kg_per_acre1 * SC_present$Est_Survival)
-SC_present$C_kg_per_acre_surv_adj2 <- (SC_present$C_kg_per_acre2 * SC_present$Est_Survival)
+########################################
+# 7. Terrain attributes (slope, aspect) at seedling locations
+#    (aligns with Methods: plot-level slope/aspect from DEM)
+########################################
 
-SC_present2  <- SC_present %>% mutate(C_kg_per_acre1 = if_else(C_kg_per_acre1 <0, 0, C_kg_per_acre1))
-SC_present2  <- SC_present %>% mutate(C_kg_per_acre2 = if_else(C_kg_per_acre2 <0, 0, C_kg_per_acre2))
-SC_present2$C_kg_per_acre_surv_adj1 <- (SC_present2$C_kg_per_acre1 * SC_present2$Est_Survival)
+# Remove missing coordinates
+SC <- SC[!is.na(SC$X) & !is.na(SC$Y), ]
+unique(SC$X)
+unique(SC$Y)
 
-SCCC <- dplyr::filter(SC_present2_edit, Year == 2024)
+if (nrow(SC) == 0) {
+  stop("No valid coordinates after removing NA.")
+}
 
-##---- FIGURE 2
+# Create sf points (WGS84)
+pts_sf <- st_as_sf(SC, coords = c("X", "Y"), crs = 4326)
 
-present <- ggplot(SC_present2_edit, aes(x = as.factor(Year), y =   (C_kg_per_acre1/2), group = Site, color = Site ))+
-  #geom_point(size = 3, alpha = 0.2)+
-  geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=6))+ 
-  xlab("Year") + ylab("C (kg) per acre")+ylim(0,170)
+# Bounding box with small buffer
+bb <- st_bbox(pts_sf)
+bb_pad <- st_bbox(c(
+  xmin = bb["xmin"] - 0.01,
+  ymin = bb["ymin"] - 0.01,
+  xmax = bb["xmax"] + 0.01,
+  ymax = bb["ymax"] + 0.01
+), crs = st_crs(pts_sf))
 
-present  <- present  + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=0.1))
-present  <- present  + theme( legend.position = "none") + ggtitle("present ")
-#
+bb_pad <- as.numeric(bb_pad)
+if (any(is.na(bb_pad))) {
+  stop("Bounding box contains NA values. Check your coordinates.")
+}
 
-present_surv <- ggplot(SC_present2_edit, aes(x = as.factor(Year), y =   (C_kg_per_acre_surv_adj1/2), group = Site, color = Site ))+
-  #geom_point(size = 3, alpha = 0.2)+
-  geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=6))+ 
-  xlab("Year") + ylab("C (kg)")+ylim(0,170)
+bb_poly <- st_as_sfc(bb_pad)
+bb_sf   <- st_sf(geometry = bb_poly)
 
-present_surv <- present_surv + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=0.1))
-present_surv <- present_surv + theme( legend.position = "none") + ggtitle("present adjusted by survival")
+# DEM and terrain
+dem_raster <- get_elev_raster(locations = bb_sf, z = 9, clip = "none")
+slope_r    <- terrain(dem_raster, opt = "slope",  units = "degrees")
+aspect_r   <- terrain(dem_raster, opt = "aspect", units = "degrees")
+
+# Extract slope/aspect at seedling points
+SC_sp <- SC
+coordinates(SC_sp) <- ~ X + Y
+proj4string(SC_sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
+
+if (!identical(crs(dem_raster), crs(SC_sp))) {
+  SC_sp <- spTransform(SC_sp, crs(dem_raster))
+}
+
+SC$slope  <- extract(slope_r,  SC_sp)
+SC$aspect <- extract(aspect_r, SC_sp)
+
+########################################
+# 8. Direct GAM allometry:
+#    Height & Diameter → biomass components (Figure 1, Table 1)
+########################################
+
+ggplot(SC2, aes(x = Height * Diameter, y = Combined_DRYWT, col = SITE, group = SITE)) +
+  geom_point(size = 3, alpha = 0.3) +
+  geom_smooth(method = "gam", alpha = 0.13) +
+  xlim(0, 1000)
+
+# GAMs with interaction (Height * Diameter)
+gam1  <- mgcv::gam(Combined_DRYWT ~ Height * Diameter, data = SC2, na.action = na.exclude)
+gam2  <- mgcv::gam(GRNWT          ~ Height * Diameter, data = SC2, na.action = na.exclude)
+gam3  <- mgcv::gam(NEEDLE_DRYWT   ~ Height * Diameter, data = SC2, na.action = na.exclude)
+gam4  <- mgcv::gam(STEM_DRYWT     ~ Height * Diameter, data = SC2, na.action = na.exclude)
+
+summary(gam1)
+summary(gam2)
+summary(gam3)
+summary(gam4)
+
+# GAMs with tensor product smooths te(Height, Diameter)
+gam1a <- mgcv::gam(Combined_DRYWT ~ te(Height, Diameter), data = SC2, na.action = na.exclude)
+gam2a <- mgcv::gam(GRNWT          ~ te(Height, Diameter), data = SC2, na.action = na.exclude)
+gam3a <- mgcv::gam(NEEDLE_DRYWT   ~ te(Height, Diameter), data = SC2, na.action = na.exclude)
+gam4a <- mgcv::gam(STEM_DRYWT     ~ te(Height, Diameter), data = SC2, na.action = na.exclude)
+
+summary(gam1a)
+summary(gam2a)
+summary(gam3a)
+summary(gam4a)
+
+# Add predicted values from direct allometry
+SC2 <- add_predictions(SC2, gam1,  var = "pred_direct_gam")
+SC2 <- add_predictions(SC2, gam1a, var = "pred_direct_gamA")
+
+# Max observed combined dry mass by site (for descriptive stats)
+SC2_mean <- SC2 %>%
+  group_by(SITE) %>%
+  summarise(
+    Combined_DRYWT = max(Combined_DRYWT, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+########################################
+# 9. Climate data and variable selection (ClimateNA-derived)
+#    (aligns with Methods: climate covariates and model selection)
+########################################
+
+SC3a <- read.csv("/Users/guestpc/Library/CloudStorage/OneDrive-UniversityofNewMexico/a1DOCS/Carbon Project NMSU/SC3_ClimateNAmean2018_2023.csv")
+SC3a$AGE <- (2024 - SC3a$Year.Planted)
+
+climate_vars <- c(
+  "MAT", "MWMT", "MCMT", "TD", "MAP", "MSP", "AHM", "SHM",
+  "DD_0", "DD5", "DD_18", "DD18", "NFFD", "bFFP", "eFFP",
+  "FFP", "PAS", "rsds", "Eref", "CMD", "RH",
+  "CMI", "DD1040", "AGE"
+)
+
+climate_data <- SC3a[, climate_vars]
+climate_cor  <- cor(climate_data, use = "pairwise.complete.obs")
+corrplot(climate_cor, method = "color", type = "full", tl.cex = 0.8)
+
+# Helper: check groups of variables with pairwise |r| < 0.7
+is_low_cor_group <- function(vars, cor_matrix, threshold = 0.7) {
+  idx <- combn(vars, 2, simplify = FALSE)
+  all(sapply(idx, function(pair) abs(cor_matrix[pair[1], pair[2]]) < threshold))
+}
+
+max_group_size  <- 6
+low_cor_groups  <- list()
+
+for (k in 2:max_group_size) {
+  combs <- combn(climate_vars, k, simplify = FALSE)
+  message("Checking groups of size ", k, " (", length(combs), " combinations)...")
+  for (group in combs) {
+    if (is_low_cor_group(group, climate_cor, threshold = 0.7)) {
+      low_cor_groups[[length(low_cor_groups) + 1]] <- group
+    }
+  }
+}
+
+cat("Number of groups found:", length(low_cor_groups), "\n")
+for (i in seq_len(min(449, length(low_cor_groups)))) {
+  cat("Group", i, ":", paste(low_cor_groups[[i]], collapse = ", "), "\n")
+}
+
+########################################
+# 10. Model selection: GAMs of Combined_DRYWT ~ climate + AGE
+#     (search over low-collinearity climate groups)
+########################################
+
+results <- data.frame(group = I(list()), AIC = numeric(), adjR2 = numeric())
+
+for (i in seq_along(low_cor_groups)) {
+  group <- low_cor_groups[[i]]
+  formula_str <- paste(
+    "Combined_DRYWT ~",
+    paste(sprintf("s(%s, k=5)", group), collapse = " + ")
+  )
+  gam_formula <- as.formula(formula_str)
+  
+  model <- tryCatch(
+    gam(gam_formula, data = SC3a, method = "REML"),
+    error = function(e) NULL
+  )
+  
+  if (!is.null(model)) {
+    model_aic   <- AIC(model)
+    model_adjR2 <- summary(model)$r.sq
+    results <- rbind(
+      results,
+      data.frame(group = I(list(group)), AIC = model_aic, adjR2 = model_adjR2)
+    )
+  }
+}
+
+print(results)
+results_ordered <- results[order(-results$adjR2, results$AIC), ]
+head(results_ordered, 10)
+
+########################################
+# 11. Final indirect GAMs (AGE + selected climate variables)
+#     (these correspond to the equations used for projections)
+########################################
+
+a1 <- mgcv::gam(
+  Combined_DRYWT ~ 
+    s(AGE, k = 5) +
+    s(PAS, k = 8) +
+    s(CMD, k = 7),
+  data = SC3a
+)
+summary(a1)
+
+a2 <- mgcv::gam(
+  Combined_DRYWT ~ 
+    s(AGE, k = 5) +
+    s(PAS, k = 8) +
+    s(CMI, k = 7),
+  data = SC3a
+)
+summary(a2)
+
+A1mod <- mgcv::gam(
+  Combined_DRYWT ~ 
+    s(AGE, k = 5) +
+    s(AHM, k = 8) +
+    s(NFFD, k = 7),
+  select = TRUE,
+  data   = SC3a
+)
+summary(A1mod)
+
+########################################
+# 12. Site-level summaries for Table 1
+#     (mean diameter, height, and modelled biomass by site)
+########################################
+
+SC3c <- add_predictions(SC3a, gam1,  var = "pred_direct_gam")
+SC3c <- add_predictions(SC3c, gam1a, var = "pred_direct_gamA")
+
+SC3_mean_dia <- SC3c %>%
+  group_by(SITE) %>%
+  summarise(mean_diam = mean(Diameter, na.rm = TRUE))
+
+SC3_sd_dia <- SC3c %>%
+  group_by(SITE) %>%
+  summarise(mean_diam = sd(Diameter, na.rm = TRUE))
+
+SC3_mean_he <- SC3c %>%
+  group_by(SITE) %>%
+  summarise(mean_diam = mean(Height, na.rm = TRUE))
+
+SC3_sd_he <- SC3c %>%
+  group_by(SITE) %>%
+  summarise(mean_diam = sd(Height, na.rm = TRUE))
+
+SC3_mean <- SC3c %>%
+  group_by(SITE) %>%
+  summarise(mean_pred_direct_gam = mean(pred_direct_gam, na.rm = TRUE))
+
+SC3_mean1 <- SC3c %>%
+  group_by(SITE) %>%
+  summarise(mean_pred_direct_gamA = mean(pred_direct_gamA, na.rm = TRUE))
+
+SC3_tpa <- SC3c %>%
+  group_by(SITE) %>%
+  summarise(TPA = mean(TPA.Planted, na.rm = TRUE))
+
+SC3_tpH <- SC3c %>%
+  group_by(SITE) %>%
+  summarise(TPH = mean(TPA.Planted * 2.47105, na.rm = TRUE))
+
+# Hand calculations of C per ha from mean biomass and TPA (for checking)
+((7.56 * 331)/100) * 0.5
+((6.57 * 331)/100) * 0.5
+((85.5 * 568)/100) * 0.5
+((2.86 * 865)/100) * 0.5
+((31.9 * 494)/100) * 0.5
+((22.5 * 568)/100) * 0.5
+((4.10 * 712)/100) * 0.5
+((2.88 * 652)/100) * 0.5
+
+# Buff check values
+((7.24 * 331)/100) * 0.5
+((6.33 * 331)/100) * 0.5
+((102  * 568)/100) * 0.5
+((4.82 * 865)/100) * 0.5
+((41.6 * 494)/100) * 0.5
+((19.8 * 568)/100) * 0.5
+((4.31 * 712)/100) * 0.5
+((1.87 * 652)/100) * 0.5
+
+# Direct vs indirect allometry difference by site
+SC3_mean_diff <- SC3_mean %>%
+  full_join(SC3_mean1, by = "SITE") %>%
+  mutate(diff = mean_pred_direct_gam - mean_pred_direct_gamA)
+
+SC3_mean_diff
+
+# Site-level climate means (for text/tables)
+SC3_AHM <- SC3 %>%
+  group_by(SITE) %>%
+  summarise(mean_AHM = mean(AHM, na.rm = TRUE))
+
+SC3_NFFD <- SC3 %>%
+  group_by(SITE) %>%
+  summarise(mean_NFFD = mean(NFFD, na.rm = TRUE))
+
+########################################
+# 13. Present climate projections:
+#     site-level C per ha through time (Figure 2A)
+########################################
+
+present_indYr_graph <- read.csv("/Users/guestpc/Library/CloudStorage/OneDrive-UniversityofNewMexico/a1DOCS/Carbon Project NMSU/SC3_mean_2018_2023_for graph.csv")
+
+present_indYr_graph <- add_predictions(present_indYr_graph, A1mod, var = "pred_indirect_gam_A1mod")
+present_indYr_graph$TPH <- present_indYr_graph$TPA * 2.4710538
+present_indYr_graph$biomass_per_H_A1mod <- present_indYr_graph$pred_indirect_gam_A1mod * present_indYr_graph$TPH
+present_indYr_graph$C_per_H_KG_A1mod    <- (present_indYr_graph$biomass_per_H_A1mod / 100) * 0.5
+present_indYr_graph$C_per_H_KG_A1mod[present_indYr_graph$AGE == 0] <- 0
+present_indYr_graph$C_per_H_KG_A1mod[present_indYr_graph$C_per_H_KG_A1mod < 0] <- 0
+
+present <- ggplot(present_indYr_graph, aes(
+  x     = as.factor(YEAR),
+  y     = C_per_H_KG_A1mod,
+  group = SITE,
+  color = SITE
+)) +
+  geom_smooth(method = "gam", formula = y ~ s(x, bs = "ps"), level = 0.95) +
+  xlab("Year") + ylab("C (kg) per ha") + ylim(0, 250)
+
+present + theme_minimal() + theme(legend.position = "none") + ggtitle("present ")
+
+# Survival-adjusted present carbon
+present_surv <- ggplot(present_indYr_graph, aes(
+  x     = as.factor(YEAR),
+  y     = (C_per_H_KG_A1mod * Surv),
+  group = SITE,
+  color = SITE
+)) +
+  geom_smooth(method = "gam", formula = y ~ s(x, bs = "ps"), level = 0.95) +
+  xlab("Year") + ylab("C (kg) per ha") + ylim(0, 250)
+
+present_surv + theme_minimal() + theme(legend.position = "none") +
+  ggtitle("present - survival adjusted ")
+
+########################################
+# 14. Future climate projections (SSP ensemble):
+#     site-level C per ha through time (Figure 2B)
+########################################
+
+SC3_future_mean_graph <- read.csv("/Users/guestpc/Library/CloudStorage/OneDrive-UniversityofNewMexico/a1DOCS/Carbon Project NMSU/SC3_mean_ssp370_585_2030_2035.csv")
+
+SC3_future_mean_graph <- add_predictions(SC3_future_mean_graph, A1mod, var = "pred_indirect_gam_A1mod")
+SC3_future_mean_graph$TPH <- SC3_future_mean_graph$TPA * 2.4710538
+SC3_future_mean_graph$biomass_PH_A1mod <- SC3_future_mean_graph$pred_indirect_gam_A1mod * SC3_future_mean_graph$TPH
+SC3_future_mean_graph$C_per_H_KG_A1mod <- (SC3_future_mean_graph$biomass_PH_A1mod / 100) * 0.5
+SC3_future_mean_graph$C_per_H_KG_A1mod[SC3_future_mean_graph$AGE == 0] <- 0
+SC3_future_mean_graph$C_per_H_KG_A1mod[SC3_future_mean_graph$C_per_H_KG_A1mod < 0] <- 0
+
+future_mean <- ggplot(SC3_future_mean_graph, aes(
+  x     = as.factor(YEAR),
+  y     = C_per_H_KG_A1mod,
+  group = SITE,
+  color = SITE
+)) +
+  geom_smooth(method = "gam", formula = y ~ s(x, bs = "ps"), level = 0.95) +
+  xlab("Year") + ylab("C (kg) per ha") + ylim(0, 250)
+
+future_mean + theme_minimal() + theme(legend.position = "none") +
+  ggtitle("future_13mod_mean")
+
+# Survival-adjusted future carbon
+future_mean_surv <- ggplot(SC3_future_mean_graph, aes(
+  x     = as.factor(YEAR),
+  y     = (C_per_H_KG_A1mod * Surv),
+  group = SITE,
+  color = SITE
+)) +
+  geom_smooth(method = "gam", formula = y ~ s(x, bs = "ps"), level = 0.95) +
+  xlab("Year") + ylab("C (kg) per ha") + ylim(0, 250)
+
+future_mean_surv + theme_minimal() + ggtitle("future - survival adjusted ")
+
+View(SC3_future_mean_graph)
